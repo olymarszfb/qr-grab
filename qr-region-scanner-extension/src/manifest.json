@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "Pinpoint QR Scanner",
+  "version": "0.1.0",
+  "description": "Drag over a visible QR code and decode it locally from the current tab.",
+  "minimum_chrome_version": "110",
+  "permissions": ["activeTab", "scripting"],
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Pinpoint QR Scanner",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "commands": {
+    "scan-visible-area": {
+      "suggested_key": {
+        "default": "Alt+Shift+Q"
+      },
+      "description": "Select a QR code region"
+    }
+  }
+}

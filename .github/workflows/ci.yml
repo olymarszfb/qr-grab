@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  windows-app:
+    name: Windows app
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Build
+        run: dotnet build .\qr-screen-scanner-app -c Release
+      - name: Publish framework-dependent exe
+        run: dotnet publish .\qr-screen-scanner-app -c Release -r win-x64 --self-contained false -o .\artifacts\qr-screen-scanner-app
+      - name: Self-test published exe
+        run: .\artifacts\qr-screen-scanner-app\PinpointQrScanner.exe --self-test
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pinpoint-qr-scanner-win-x64
+          path: .\artifacts\qr-screen-scanner-app
+
+  chrome-extension:
+    name: Chrome extension
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: qr-region-scanner-extension
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: qr-region-scanner-extension/package-lock.json
+      - name: Install
+        run: npm ci
+      - name: Verify
+        run: npm run verify
+      - name: Package
+        run: npm run package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pinpoint-qr-scanner-extension
+          path: qr-region-scanner-extension\release\pinpoint-qr-scanner-extension.zip

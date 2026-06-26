@@ -1,0 +1,20 @@
+{
+  "name": "pinpoint-qr-scanner-extension",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Chrome extension companion for selecting and decoding visible QR code regions.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "package": "npm run build && powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package.ps1",
+    "verify": "npm run build && node scripts/verify-decode.mjs"
+  },
+  "dependencies": {
+    "jsqr": "^1.4.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "qrcode": "^1.5.4"
+  }
+}
