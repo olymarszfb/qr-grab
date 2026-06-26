@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "QR Grab",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Drag over a visible QR code and decode it locally from the current tab.",
   "minimum_chrome_version": "110",
   "permissions": ["activeTab", "scripting"],

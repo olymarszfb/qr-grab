@@ -26,6 +26,12 @@ npm run verify
 
 This rebuilds the extension and verifies the bundled QR decoder against a generated QR fixture.
 
+## When the Icon Does Nothing
+
+Chrome does not allow extensions to inject UI into protected pages such as `chrome://` pages, the Chrome Web Store, extension pages, and some browser-managed documents. QR Grab shows a temporary `!` badge on the extension icon when Chrome blocks the current tab.
+
+If you are using the unpacked development build and just reloaded or updated the extension, reload the target tab once. The Windows app does not have this browser-page limitation and is the best fallback for scanning anything visible on screen.
+
 ## Package
 
 ```powershell

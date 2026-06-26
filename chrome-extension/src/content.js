@@ -1,38 +1,51 @@
 import jsQR from 'jsqr';
 
-if (!window.__qrRegionScannerLoaded) {
-  window.__qrRegionScannerLoaded = true;
+const STATE_KEY = '__qrGrabState';
+const START_SELECTION_MESSAGE = 'qr-grab:start-selection';
+const CAPTURE_VISIBLE_TAB_MESSAGE = 'qr-grab:capture-visible-tab';
+const OPEN_URL_MESSAGE = 'qr-grab:open-url';
+const ROOT_ID = 'qr-grab-root';
+const MIN_SELECTION_SIZE = 20;
+const state = window[STATE_KEY] ?? {};
 
-  const ROOT_ID = 'qr-grab-root';
-  const MIN_SELECTION_SIZE = 20;
-  let activeCleanup = null;
+window[STATE_KEY] = state;
 
-  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-    if (message?.type !== 'qr-region:start-selection') {
-      return false;
-    }
+if (state.messageHandler) {
+  try {
+    chrome.runtime.onMessage.removeListener(state.messageHandler);
+  } catch {
+    // A previous unpacked-extension reload can leave stale page state behind.
+  }
+}
 
-    startSelection();
-    sendResponse({ ok: true });
+state.messageHandler = (message, _sender, sendResponse) => {
+  if (message?.type !== START_SELECTION_MESSAGE) {
     return false;
-  });
+  }
 
-  function startSelection() {
-    cleanup();
+  startSelection();
+  sendResponse({ ok: true });
+  return false;
+};
 
-    const host = document.createElement('div');
-    host.id = ROOT_ID;
-    document.documentElement.appendChild(host);
+chrome.runtime.onMessage.addListener(state.messageHandler);
 
-    const abortController = new AbortController();
-    const shadow = host.attachShadow({ mode: 'open' });
-    activeCleanup = () => {
-      abortController.abort();
-      host.remove();
-      activeCleanup = null;
-    };
+function startSelection() {
+  cleanup();
 
-    shadow.innerHTML = `
+  const host = document.createElement('div');
+  host.id = ROOT_ID;
+  document.documentElement.appendChild(host);
+
+  const abortController = new AbortController();
+  const shadow = host.attachShadow({ mode: 'open' });
+  state.activeCleanup = () => {
+    abortController.abort();
+    host.remove();
+    state.activeCleanup = null;
+  };
+
+  shadow.innerHTML = `
       <style>
         :host {
           all: initial;
@@ -184,8 +197,8 @@ if (!window.__qrRegionScannerLoaded) {
       <div class="hint">Drag around the QR code <span class="muted">Release to scan</span> <kbd>Esc</kbd></div>
       <div class="selection"></div>
       <div class="toast"></div>
-      <section class="result" role="dialog" aria-modal="true" aria-labelledby="qr-region-title">
-        <h2 id="qr-region-title">QR code found</h2>
+      <section class="result" role="dialog" aria-modal="true" aria-labelledby="qr-grab-title">
+        <h2 id="qr-grab-title">QR code found</h2>
         <textarea readonly></textarea>
         <div class="actions">
           <button type="button" data-action="scan-again">Scan again</button>
@@ -196,324 +209,323 @@ if (!window.__qrRegionScannerLoaded) {
       </section>
     `;
 
-    const overlay = shadow.querySelector('.overlay');
-    const selection = shadow.querySelector('.selection');
-    const toast = shadow.querySelector('.toast');
-    const result = shadow.querySelector('.result');
-    const textarea = shadow.querySelector('textarea');
-    const openButton = shadow.querySelector('[data-action="open"]');
+  const overlay = shadow.querySelector('.overlay');
+  const selection = shadow.querySelector('.selection');
+  const toast = shadow.querySelector('.toast');
+  const result = shadow.querySelector('.result');
+  const textarea = shadow.querySelector('textarea');
+  const openButton = shadow.querySelector('[data-action="open"]');
 
-    let start = null;
-    let currentRect = null;
+  let start = null;
+  let currentRect = null;
 
-    function onPointerDown(event) {
-      if (event.button !== 0) {
-        return;
-      }
-
-      start = clampPoint(event.clientX, event.clientY);
-      currentRect = null;
-      selection.style.display = 'block';
-      updateSelection(start.x, start.y, start.x, start.y);
-      overlay.setPointerCapture(event.pointerId);
+  function onPointerDown(event) {
+    if (event.button !== 0) {
+      return;
     }
 
-    function onPointerMove(event) {
-      if (!start) {
-        return;
-      }
+    start = clampPoint(event.clientX, event.clientY);
+    currentRect = null;
+    selection.style.display = 'block';
+    updateSelection(start.x, start.y, start.x, start.y);
+    overlay.setPointerCapture(event.pointerId);
+  }
 
-      const point = clampPoint(event.clientX, event.clientY);
-      updateSelection(start.x, start.y, point.x, point.y);
+  function onPointerMove(event) {
+    if (!start) {
+      return;
     }
 
-    async function onPointerUp(event) {
-      if (!start) {
-        return;
+    const point = clampPoint(event.clientX, event.clientY);
+    updateSelection(start.x, start.y, point.x, point.y);
+  }
+
+  async function onPointerUp(event) {
+    if (!start) {
+      return;
+    }
+
+    const point = clampPoint(event.clientX, event.clientY);
+    updateSelection(start.x, start.y, point.x, point.y);
+    start = null;
+
+    if (!currentRect || currentRect.width < MIN_SELECTION_SIZE || currentRect.height < MIN_SELECTION_SIZE) {
+      showToast('Select a larger area around the QR code.');
+      selection.style.display = 'none';
+      return;
+    }
+
+    await decodeSelection(currentRect);
+  }
+
+  function onKeyDown(event) {
+    if (event.key === 'Escape') {
+      cleanup();
+    }
+  }
+
+  async function decodeSelection(rect) {
+    showToast('Capturing selected area...');
+
+    try {
+      const capture = await captureVisibleTab(host);
+
+      if (!capture?.ok) {
+        throw new Error(capture?.error || 'Could not capture this tab.');
       }
 
-      const point = clampPoint(event.clientX, event.clientY);
-      updateSelection(start.x, start.y, point.x, point.y);
-      start = null;
+      showToast('Scanning selected area...');
+      const image = await loadImage(capture.dataUrl);
+      const decoded = decodeFromImage(image, rect);
 
-      if (!currentRect || currentRect.width < MIN_SELECTION_SIZE || currentRect.height < MIN_SELECTION_SIZE) {
-        showToast('Select a larger area around the QR code.');
+      if (!decoded) {
+        showToast('No QR code found there. Try a slightly wider box.');
         selection.style.display = 'none';
         return;
       }
 
-      await decodeSelection(currentRect);
+      textarea.value = decoded.data;
+      openButton.style.display = isLikelyUrl(decoded.data) ? 'inline-block' : 'none';
+      toast.style.display = 'none';
+      selection.style.display = 'none';
+      result.style.display = 'block';
+      textarea.focus();
+      textarea.select();
+    } catch (error) {
+      showToast(error?.message || 'Could not scan that area.');
+      selection.style.display = 'none';
     }
-
-    function onKeyDown(event) {
-      if (event.key === 'Escape') {
-        cleanup();
-      }
-    }
-
-    async function decodeSelection(rect) {
-      showToast('Capturing selected area...');
-
-      try {
-        const capture = await captureVisibleTab(host);
-
-        if (!capture?.ok) {
-          throw new Error(capture?.error || 'Could not capture this tab.');
-        }
-
-        showToast('Scanning selected area...');
-        const image = await loadImage(capture.dataUrl);
-        const decoded = decodeFromImage(image, rect);
-
-        if (!decoded) {
-          showToast('No QR code found there. Try a slightly wider box.');
-          selection.style.display = 'none';
-          return;
-        }
-
-        textarea.value = decoded.data;
-        openButton.style.display = isLikelyUrl(decoded.data) ? 'inline-block' : 'none';
-        toast.style.display = 'none';
-        selection.style.display = 'none';
-        result.style.display = 'block';
-        textarea.focus();
-        textarea.select();
-      } catch (error) {
-        showToast(error?.message || 'Could not scan that area.');
-        selection.style.display = 'none';
-      }
-    }
-
-    function updateSelection(x1, y1, x2, y2) {
-      const left = Math.min(x1, x2);
-      const top = Math.min(y1, y2);
-      const width = Math.abs(x2 - x1);
-      const height = Math.abs(y2 - y1);
-
-      currentRect = { left, top, width, height };
-      selection.style.left = `${left}px`;
-      selection.style.top = `${top}px`;
-      selection.style.width = `${width}px`;
-      selection.style.height = `${height}px`;
-    }
-
-    function showToast(message) {
-      toast.textContent = message;
-      toast.style.display = 'block';
-    }
-
-    shadow.addEventListener('click', async (event) => {
-      const button = event.target.closest('button');
-
-      if (!button) {
-        return;
-      }
-
-      const action = button.dataset.action;
-
-      if (action === 'close') {
-        cleanup();
-      }
-
-      if (action === 'scan-again') {
-        result.style.display = 'none';
-        selection.style.display = 'none';
-        toast.style.display = 'none';
-      }
-
-      if (action === 'copy') {
-        await copyText(textarea.value, textarea);
-        button.textContent = 'Copied';
-        setTimeout(() => {
-          button.textContent = 'Copy';
-        }, 1200);
-      }
-
-      if (action === 'open') {
-        await chrome.runtime.sendMessage({
-          type: 'qr-region:open-url',
-          url: normalizeUrl(textarea.value),
-        });
-      }
-    }, { signal: abortController.signal });
-    overlay.addEventListener('pointerdown', onPointerDown, { signal: abortController.signal });
-    overlay.addEventListener('pointermove', onPointerMove, { signal: abortController.signal });
-    overlay.addEventListener('pointerup', onPointerUp, { signal: abortController.signal });
-    window.addEventListener('keydown', onKeyDown, { capture: true, signal: abortController.signal });
   }
 
-  function decodeFromImage(image, rect) {
-    const attempts = [
-      { rect, padding: 0, maxSize: 1200 },
-      { rect, padding: 0.12, maxSize: 1200 },
-      { rect, padding: 0.28, maxSize: 1400 },
-      { rect, padding: 0.5, maxSize: 1600 },
-    ];
+  function updateSelection(x1, y1, x2, y2) {
+    const left = Math.min(x1, x2);
+    const top = Math.min(y1, y2);
+    const width = Math.abs(x2 - x1);
+    const height = Math.abs(y2 - y1);
 
-    for (const attempt of attempts) {
-      const canvas = cropToCanvas(image, attempt.rect, attempt.padding, attempt.maxSize);
-      const result = scanCanvas(canvas);
+    currentRect = { left, top, width, height };
+    selection.style.left = `${left}px`;
+    selection.style.top = `${top}px`;
+    selection.style.width = `${width}px`;
+    selection.style.height = `${height}px`;
+  }
 
-      if (result) {
-        return result;
-      }
+  function showToast(message) {
+    toast.textContent = message;
+    toast.style.display = 'block';
+  }
+
+  shadow.addEventListener('click', async (event) => {
+    const button = event.target.closest('button');
+
+    if (!button) {
+      return;
     }
 
-    return null;
-  }
+    const action = button.dataset.action;
 
-  function cropToCanvas(image, rect, paddingRatio, maxSize) {
-    const scaleX = image.naturalWidth / window.innerWidth;
-    const scaleY = image.naturalHeight / window.innerHeight;
-    const padX = rect.width * paddingRatio;
-    const padY = rect.height * paddingRatio;
-
-    const sx = clamp((rect.left - padX) * scaleX, 0, image.naturalWidth);
-    const sy = clamp((rect.top - padY) * scaleY, 0, image.naturalHeight);
-    const right = clamp((rect.left + rect.width + padX) * scaleX, 0, image.naturalWidth);
-    const bottom = clamp((rect.top + rect.height + padY) * scaleY, 0, image.naturalHeight);
-    const sourceWidth = Math.max(1, right - sx);
-    const sourceHeight = Math.max(1, bottom - sy);
-    const largestSide = Math.max(sourceWidth, sourceHeight);
-    const resizeScale = largestSide < maxSize * 0.55 ? maxSize / largestSide : Math.min(1, maxSize / largestSide);
-    const width = Math.max(1, Math.round(sourceWidth * resizeScale));
-    const height = Math.max(1, Math.round(sourceHeight * resizeScale));
-    const canvas = document.createElement('canvas');
-    const context = canvas.getContext('2d', { willReadFrequently: true });
-
-    canvas.width = width;
-    canvas.height = height;
-    context.imageSmoothingEnabled = false;
-    context.drawImage(image, sx, sy, sourceWidth, sourceHeight, 0, 0, width, height);
-
-    return canvas;
-  }
-
-  function scanCanvas(canvas) {
-    const context = canvas.getContext('2d', { willReadFrequently: true });
-    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-    const normalResult = jsQR(imageData.data, imageData.width, imageData.height, {
-      inversionAttempts: 'attemptBoth',
-    });
-
-    if (normalResult) {
-      return normalResult;
+    if (action === 'close') {
+      cleanup();
     }
 
-    const thresholded = thresholdImageData(imageData);
-    return jsQR(thresholded.data, thresholded.width, thresholded.height, {
-      inversionAttempts: 'attemptBoth',
-    });
-  }
-
-  function thresholdImageData(imageData) {
-    const output = new ImageData(new Uint8ClampedArray(imageData.data), imageData.width, imageData.height);
-    const data = output.data;
-    let total = 0;
-    const pixels = data.length / 4;
-
-    for (let index = 0; index < data.length; index += 4) {
-      total += 0.299 * data[index] + 0.587 * data[index + 1] + 0.114 * data[index + 2];
+    if (action === 'scan-again') {
+      result.style.display = 'none';
+      selection.style.display = 'none';
+      toast.style.display = 'none';
     }
 
-    const threshold = total / pixels;
-
-    for (let index = 0; index < data.length; index += 4) {
-      const value = 0.299 * data[index] + 0.587 * data[index + 1] + 0.114 * data[index + 2] > threshold ? 255 : 0;
-      data[index] = value;
-      data[index + 1] = value;
-      data[index + 2] = value;
-      data[index + 3] = 255;
+    if (action === 'copy') {
+      await copyText(textarea.value, textarea);
+      button.textContent = 'Copied';
+      setTimeout(() => {
+        button.textContent = 'Copy';
+      }, 1200);
     }
 
-    return output;
+    if (action === 'open') {
+      await chrome.runtime.sendMessage({
+        type: OPEN_URL_MESSAGE,
+        url: normalizeUrl(textarea.value),
+      });
+    }
+  }, { signal: abortController.signal });
+  overlay.addEventListener('pointerdown', onPointerDown, { signal: abortController.signal });
+  overlay.addEventListener('pointermove', onPointerMove, { signal: abortController.signal });
+  overlay.addEventListener('pointerup', onPointerUp, { signal: abortController.signal });
+  window.addEventListener('keydown', onKeyDown, { capture: true, signal: abortController.signal });
+}
+
+function decodeFromImage(image, rect) {
+  const attempts = [
+    { rect, padding: 0, maxSize: 1200 },
+    { rect, padding: 0.12, maxSize: 1200 },
+    { rect, padding: 0.28, maxSize: 1400 },
+    { rect, padding: 0.5, maxSize: 1600 },
+  ];
+
+  for (const attempt of attempts) {
+    const canvas = cropToCanvas(image, attempt.rect, attempt.padding, attempt.maxSize);
+    const result = scanCanvas(canvas);
+
+    if (result) {
+      return result;
+    }
   }
 
-  function clampPoint(x, y) {
-    return {
-      x: clamp(x, 0, window.innerWidth),
-      y: clamp(y, 0, window.innerHeight),
-    };
+  return null;
+}
+
+function cropToCanvas(image, rect, paddingRatio, maxSize) {
+  const scaleX = image.naturalWidth / window.innerWidth;
+  const scaleY = image.naturalHeight / window.innerHeight;
+  const padX = rect.width * paddingRatio;
+  const padY = rect.height * paddingRatio;
+
+  const sx = clamp((rect.left - padX) * scaleX, 0, image.naturalWidth);
+  const sy = clamp((rect.top - padY) * scaleY, 0, image.naturalHeight);
+  const right = clamp((rect.left + rect.width + padX) * scaleX, 0, image.naturalWidth);
+  const bottom = clamp((rect.top + rect.height + padY) * scaleY, 0, image.naturalHeight);
+  const sourceWidth = Math.max(1, right - sx);
+  const sourceHeight = Math.max(1, bottom - sy);
+  const largestSide = Math.max(sourceWidth, sourceHeight);
+  const resizeScale = largestSide < maxSize * 0.55 ? maxSize / largestSide : Math.min(1, maxSize / largestSide);
+  const width = Math.max(1, Math.round(sourceWidth * resizeScale));
+  const height = Math.max(1, Math.round(sourceHeight * resizeScale));
+  const canvas = document.createElement('canvas');
+  const context = canvas.getContext('2d', { willReadFrequently: true });
+
+  canvas.width = width;
+  canvas.height = height;
+  context.imageSmoothingEnabled = false;
+  context.drawImage(image, sx, sy, sourceWidth, sourceHeight, 0, 0, width, height);
+
+  return canvas;
+}
+
+function scanCanvas(canvas) {
+  const context = canvas.getContext('2d', { willReadFrequently: true });
+  const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+  const normalResult = jsQR(imageData.data, imageData.width, imageData.height, {
+    inversionAttempts: 'attemptBoth',
+  });
+
+  if (normalResult) {
+    return normalResult;
   }
 
-  function clamp(value, min, max) {
-    return Math.min(max, Math.max(min, value));
+  const thresholded = thresholdImageData(imageData);
+  return jsQR(thresholded.data, thresholded.width, thresholded.height, {
+    inversionAttempts: 'attemptBoth',
+  });
+}
+
+function thresholdImageData(imageData) {
+  const output = new ImageData(new Uint8ClampedArray(imageData.data), imageData.width, imageData.height);
+  const data = output.data;
+  let total = 0;
+  const pixels = data.length / 4;
+
+  for (let index = 0; index < data.length; index += 4) {
+    total += 0.299 * data[index] + 0.587 * data[index + 1] + 0.114 * data[index + 2];
   }
 
-  function loadImage(dataUrl) {
-    return new Promise((resolve, reject) => {
-      const image = new Image();
-      image.onload = () => resolve(image);
-      image.onerror = () => reject(new Error('Could not read the captured tab image.'));
-      image.src = dataUrl;
-    });
+  const threshold = total / pixels;
+
+  for (let index = 0; index < data.length; index += 4) {
+    const value = 0.299 * data[index] + 0.587 * data[index + 1] + 0.114 * data[index + 2] > threshold ? 255 : 0;
+    data[index] = value;
+    data[index + 1] = value;
+    data[index + 2] = value;
+    data[index + 3] = 255;
   }
 
-  async function captureVisibleTab(host) {
-    const previousVisibility = host.style.visibility;
-    host.style.visibility = 'hidden';
+  return output;
+}
+
+function clampPoint(x, y) {
+  return {
+    x: clamp(x, 0, window.innerWidth),
+    y: clamp(y, 0, window.innerHeight),
+  };
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function loadImage(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error('Could not read the captured tab image.'));
+    image.src = dataUrl;
+  });
+}
+
+async function captureVisibleTab(host) {
+  const previousVisibility = host.style.visibility;
+  host.style.visibility = 'hidden';
+  await waitForPaint();
+
+  try {
+    return await chrome.runtime.sendMessage({ type: CAPTURE_VISIBLE_TAB_MESSAGE });
+  } finally {
+    host.style.visibility = previousVisibility;
     await waitForPaint();
+  }
+}
 
-    try {
-      return await chrome.runtime.sendMessage({ type: 'qr-region:capture-visible-tab' });
-    } finally {
-      host.style.visibility = previousVisibility;
-      await waitForPaint();
-    }
+function waitForPaint() {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(resolve));
+  });
+}
+
+function isLikelyUrl(value) {
+  const trimmed = value.trim();
+
+  if (/^https?:\/\//i.test(trimmed)) {
+    return true;
   }
 
-  function waitForPaint() {
-    return new Promise((resolve) => {
-      requestAnimationFrame(() => requestAnimationFrame(resolve));
-    });
+  if (!/^[\w.-]+\.[a-z]{2,}([/:?#].*)?$/i.test(trimmed)) {
+    return false;
   }
 
-  function isLikelyUrl(value) {
-    const trimmed = value.trim();
+  try {
+    const url = new URL(normalizeUrl(trimmed));
+    return Boolean(url.hostname);
+  } catch {
+    return false;
+  }
+}
 
-    if (/^https?:\/\//i.test(trimmed)) {
-      return true;
-    }
+function normalizeUrl(value) {
+  const trimmed = value.trim();
 
-    if (!/^[\w.-]+\.[a-z]{2,}([/:?#].*)?$/i.test(trimmed)) {
-      return false;
-    }
-
-    try {
-      const url = new URL(normalizeUrl(trimmed));
-      return Boolean(url.hostname);
-    } catch {
-      return false;
-    }
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed;
   }
 
-  function normalizeUrl(value) {
-    const trimmed = value.trim();
+  return `https://${trimmed}`;
+}
 
-    if (/^https?:\/\//i.test(trimmed)) {
-      return trimmed;
-    }
+async function copyText(value, fallbackElement) {
+  try {
+    await navigator.clipboard.writeText(value);
+    return;
+  } catch {
+    fallbackElement.focus();
+    fallbackElement.select();
+    document.execCommand('copy');
+  }
+}
 
-    return `https://${trimmed}`;
+function cleanup() {
+  if (state.activeCleanup) {
+    state.activeCleanup();
+    return;
   }
 
-  async function copyText(value, fallbackElement) {
-    try {
-      await navigator.clipboard.writeText(value);
-      return;
-    } catch {
-      fallbackElement.focus();
-      fallbackElement.select();
-      document.execCommand('copy');
-    }
-  }
-
-  function cleanup() {
-    if (activeCleanup) {
-      activeCleanup();
-      return;
-    }
-
-    document.getElementById(ROOT_ID)?.remove();
-  }
+  document.getElementById(ROOT_ID)?.remove();
 }

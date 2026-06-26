@@ -8,7 +8,7 @@
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
-    <Version>0.2.0</Version>
+    <Version>0.2.1</Version>
     <Authors>Futur</Authors>
     <Product>QR Grab</Product>
     <Description>Snipping-style local Windows QR scanner.</Description>
