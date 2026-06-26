@@ -1,6 +1,6 @@
 using System.Drawing.Drawing2D;
 
-namespace qr_screen_scanner_app;
+namespace QRGrab;
 
 internal sealed class SelectionOverlayForm : Form
 {

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "Pinpoint QR Scanner",
-  "version": "0.1.0",
+  "name": "QR Grab",
+  "version": "0.2.0",
   "description": "Drag over a visible QR code and decode it locally from the current tab.",
   "minimum_chrome_version": "110",
   "permissions": ["activeTab", "scripting"],
@@ -15,7 +15,7 @@
     "service_worker": "background.js"
   },
   "action": {
-    "default_title": "Pinpoint QR Scanner",
+    "default_title": "QR Grab",
     "default_icon": {
       "16": "icons/icon16.png",
       "32": "icons/icon32.png",

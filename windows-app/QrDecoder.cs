@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 using ZXing;
 using ZXing.Common;
 
-namespace qr_screen_scanner_app;
+namespace QRGrab;
 
 internal sealed record DecodedQr(string Text, BarcodeFormat Format);
 

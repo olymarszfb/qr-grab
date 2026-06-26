@@ -1,7 +1,7 @@
 import jsQR from 'jsqr';
 import QRCode from 'qrcode';
 
-const payload = 'https://example.test/qr-region-scanner-verify';
+const payload = 'https://example.test/qr-grab-extension-verify';
 const qr = QRCode.create(payload, { errorCorrectionLevel: 'M' });
 const moduleCount = qr.modules.size;
 const scale = 8;

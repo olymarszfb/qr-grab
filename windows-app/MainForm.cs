@@ -1,11 +1,11 @@
 using System.Diagnostics;
 using System.Text.RegularExpressions;
 
-namespace qr_screen_scanner_app;
+namespace QRGrab;
 
 internal sealed class MainForm : Form
 {
-    private const string AppDisplayName = "Pinpoint QR Scanner";
+    private const string AppDisplayName = "QR Grab";
     private const int ScanHotKeyId = 0x5152;
     private static readonly Regex DomainLikeRegex = new(
         @"^[\w.-]+\.[A-Za-z]{2,}([/:?#].*)?$",

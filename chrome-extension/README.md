@@ -1,4 +1,4 @@
-# Pinpoint QR Scanner Extension
+# QR Grab Extension
 
 Click the extension icon or press `Alt+Shift+Q`, drag over a visible QR code, and decode it locally from the selected screen region.
 
@@ -32,4 +32,4 @@ This rebuilds the extension and verifies the bundled QR decoder against a genera
 npm run package
 ```
 
-The zip is written to `release\pinpoint-qr-scanner-extension.zip`.
+The zip is written to `release\qr-grab-extension.zip`.

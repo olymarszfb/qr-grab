@@ -1,6 +1,6 @@
 using System.Drawing.Imaging;
 
-namespace qr_screen_scanner_app;
+namespace QRGrab;
 
 internal sealed class ScreenSnapshot : IDisposable
 {

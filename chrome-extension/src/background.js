@@ -11,7 +11,7 @@ async function startScanner(tab) {
 
     await chrome.tabs.sendMessage(tab.id, { type: 'qr-region:start-selection' });
   } catch (error) {
-    console.warn('Pinpoint QR Scanner could not start:', error);
+    console.warn('QR Grab could not start:', error);
   }
 }
 

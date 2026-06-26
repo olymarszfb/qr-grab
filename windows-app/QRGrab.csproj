@@ -3,14 +3,14 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
-    <AssemblyName>PinpointQrScanner</AssemblyName>
-    <RootNamespace>qr_screen_scanner_app</RootNamespace>
+    <AssemblyName>QRGrab</AssemblyName>
+    <RootNamespace>QRGrab</RootNamespace>
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <Authors>Futur</Authors>
-    <Product>Pinpoint QR Scanner</Product>
+    <Product>QR Grab</Product>
     <Description>Snipping-style local Windows QR scanner.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <ApplicationIcon>Assets\app-icon.ico</ApplicationIcon>

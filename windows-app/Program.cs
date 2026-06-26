@@ -1,4 +1,4 @@
-namespace qr_screen_scanner_app;
+namespace QRGrab;
 
 internal static class Program
 {

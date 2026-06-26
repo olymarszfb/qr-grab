@@ -3,13 +3,13 @@ using System.Runtime.InteropServices;
 using ZXing;
 using ZXing.Common;
 
-namespace qr_screen_scanner_app;
+namespace QRGrab;
 
 internal static class QrSelfTest
 {
     internal static bool Run()
     {
-        const string payload = "https://example.test/qr-screen-scanner-self-test";
+        const string payload = "https://example.test/qr-grab-self-test";
 
         var writer = new BarcodeWriterPixelData
         {

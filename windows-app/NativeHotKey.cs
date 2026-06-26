@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace qr_screen_scanner_app;
+namespace QRGrab;
 
 [Flags]
 internal enum GlobalHotKeyModifiers : uint

@@ -3,7 +3,7 @@ import jsQR from 'jsqr';
 if (!window.__qrRegionScannerLoaded) {
   window.__qrRegionScannerLoaded = true;
 
-  const ROOT_ID = 'qr-region-scanner-root';
+  const ROOT_ID = 'qr-grab-root';
   const MIN_SELECTION_SIZE = 20;
   let activeCleanup = null;
 
